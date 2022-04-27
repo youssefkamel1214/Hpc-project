@@ -3,6 +3,7 @@
 #include <stdlib.h>
 #include<string.h>
 #include<msclr\marshal_cppstd.h>
+#include<mpi.h>
 #include <ctime>// include this header 
 #pragma once
 
@@ -13,7 +14,7 @@
 using namespace std;
 using namespace msclr::interop;
 
-int* inputImage(int* w, int* h, System::String^ imagePath) //put the size of image in w & h
+int* inputImage(int* w, int* h, System::String^ imagePath,int*sum,bool&inilized) //put the size of image in w & h
 {
 	int* input;
 
@@ -29,9 +30,9 @@ int* inputImage(int* w, int* h, System::String^ imagePath) //put the size of ima
 	OriginalImageHeight = BM.Height;
 	*w = BM.Width;
 	*h = BM.Height;
-	int* Red = new int[BM.Height * BM.Width];
-	int* Green = new int[BM.Height * BM.Width];
-	int* Blue = new int[BM.Height * BM.Width];
+	if (!inilized) {
+		sum = new int[BM.Height * BM.Width];
+	}
 	input = new int[BM.Height * BM.Width];
 	for (int i = 0; i < BM.Height; i++)
 	{
@@ -39,12 +40,9 @@ int* inputImage(int* w, int* h, System::String^ imagePath) //put the size of ima
 		{
 			System::Drawing::Color c = BM.GetPixel(j, i);
 
-			Red[i * BM.Width + j] = c.R;
-			Blue[i * BM.Width + j] = c.B;
-			Green[i * BM.Width + j] = c.G;
-
+		
 			input[i * BM.Width + j] = ((c.R + c.B + c.G) / 3); //gray scale value equals the average of RGB values
-
+			sum[i * BM.Width + j]+= ((c.R + c.B + c.G) / 3);
 		}
 
 	}
@@ -81,20 +79,28 @@ void createImage(int* image, int width, int height, int index)
 
 int main()
 {
+	MPI_Init(NULL, NULL);
+	int size, rank;
+	MPI_Comm_size(MPI_COMM_WORLD, &size);
+	MPI_Comm_size(MPI_COMM_WORLD, &rank);
 	int ImageWidth = 4, ImageHeight = 4;
-
+	int nimage, tz;
+	if (rank == 0)
+	{
+		cin >> nimage >> tz;
+	}
+	MPI_Bcast(&nimage, 1, MPI_INT, 0, MPI_COMM_WORLD);
+	MPI_Bcast(&tz, 1, MPI_INT, 0, MPI_COMM_WORLD);
 	int start_s, stop_s, TotalTime = 0;
 
 	System::String^ imagePath;
 	std::string img;
-	img = "..//Data//Input//test.png";
-
-	imagePath = marshal_as<System::String^>(img);
-	int* imageData = inputImage(&ImageWidth, &ImageHeight, imagePath);
-
-
+	img = ".//Input//";
 	start_s = clock();
-	createImage(imageData, ImageWidth, ImageHeight, 0);
+	int imgework = nimage / size,image_mod=nimage%size;
+	int st_ind = (rank * imgework) + 1, end_ind = ((rank + 1) * imgework);
+	if (rank == size - 1)
+		end_ind += image_mod;
 	stop_s = clock();
 	TotalTime += (stop_s - start_s) / double(CLOCKS_PER_SEC) * 1000;
 	cout << "time: " << TotalTime << endl;
