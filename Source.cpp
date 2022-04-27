@@ -4,6 +4,9 @@
 #include<string.h>
 #include<msclr\marshal_cppstd.h>
 #include<mpi.h>
+#include <iomanip>
+
+#include<sstream>
 #include <ctime>// include this header 
 #pragma once
 
@@ -14,7 +17,7 @@
 using namespace std;
 using namespace msclr::interop;
 
-int* inputImage(int* w, int* h, System::String^ imagePath,int*sum,bool&inilized) //put the size of image in w & h
+int* inputImage(int* w, int* h, System::String^ imagePath,int*sum) //put the size of image in w & h
 {
 	int* input;
 
@@ -30,9 +33,10 @@ int* inputImage(int* w, int* h, System::String^ imagePath,int*sum,bool&inilized)
 	OriginalImageHeight = BM.Height;
 	*w = BM.Width;
 	*h = BM.Height;
-	if (!inilized) {
-		sum = new int[BM.Height * BM.Width];
-	}
+	/*if (!inilized) {
+		sum = new int[BM.Height * BM.Width]{};
+		inilized = true;
+	}*/
 	input = new int[BM.Height * BM.Width];
 	for (int i = 0; i < BM.Height; i++)
 	{
@@ -42,6 +46,7 @@ int* inputImage(int* w, int* h, System::String^ imagePath,int*sum,bool&inilized)
 
 		
 			input[i * BM.Width + j] = ((c.R + c.B + c.G) / 3); //gray scale value equals the average of RGB values
+		    if(sum!=nullptr)
 			sum[i * BM.Width + j]+= ((c.R + c.B + c.G) / 3);
 		}
 
@@ -50,7 +55,7 @@ int* inputImage(int* w, int* h, System::String^ imagePath,int*sum,bool&inilized)
 }
 
 
-void createImage(int* image, int width, int height, int index)
+void createImage(int* image, int width, int height, string index)
 {
 	System::Drawing::Bitmap MyNewImage(width, height);
 
@@ -72,8 +77,8 @@ void createImage(int* image, int width, int height, int index)
 			MyNewImage.SetPixel(j, i, c);
 		}
 	}
-	MyNewImage.Save("..//Data//Output//outputRes" + index + ".png");
-	cout << "result Image Saved " << index << endl;
+	MyNewImage.Save("D:\\study\\third year\\second term\\high perfomance\\projects\\Hpc project\\Output\\"
+		+ marshal_as<System::String^>(index) + ".png");
 }
 
 
@@ -82,8 +87,7 @@ int main()
 	MPI_Init(NULL, NULL);
 	int size, rank;
 	MPI_Comm_size(MPI_COMM_WORLD, &size);
-	MPI_Comm_size(MPI_COMM_WORLD, &rank);
-	int ImageWidth = 4, ImageHeight = 4;
+	MPI_Comm_rank(MPI_COMM_WORLD, &rank);
 	int nimage, tz;
 	if (rank == 0)
 	{
@@ -92,20 +96,52 @@ int main()
 	MPI_Bcast(&nimage, 1, MPI_INT, 0, MPI_COMM_WORLD);
 	MPI_Bcast(&tz, 1, MPI_INT, 0, MPI_COMM_WORLD);
 	int start_s, stop_s, TotalTime = 0;
-
 	System::String^ imagePath;
 	std::string img;
-	img = ".//Input//";
 	start_s = clock();
+	int** saveimg,*sum=nullptr,*mean;
 	int imgework = nimage / size,image_mod=nimage%size;
 	int st_ind = (rank * imgework) + 1, end_ind = ((rank + 1) * imgework);
-	if (rank == size - 1)
+	int w, h;
+	if (rank == size - 1) {
 		end_ind += image_mod;
+		imgework += image_mod;
+	}
+	saveimg = new int* [imgework];
+	for (int i = st_ind; i <= end_ind; i++)
+	{
+		stringstream strstream;
+		strstream << setw(6) << setfill('0') << i;
+		img = "D:\\study\\third year\\second term\\high perfomance\\projects\\Hpc project\\input\\BackGround\\in";
+		img += strstream.str() + ".jpg";
+		saveimg[i % imgework] = inputImage(&w, &h, marshal_as<System::String^>(img), sum);
+		if (sum == nullptr) {
+			sum = new int[w * h]{};
+			for (int j = 0; j < w * h; j++)
+				sum[j] += saveimg[i%imgework][j];
+		}
+		
+
+
+	}
+	mean = new int[w * h]{};
+	MPI_Allreduce(sum, mean, w * h, MPI_INT, MPI_SUM, MPI_COMM_WORLD);
+	for (int i = 0; i < w * h; i++)
+		mean[i] /= nimage;
+	if (rank == 0)
+	{
+		createImage(mean, w, h, "estaamitedmean");
+	}
+	MPI_Barrier(MPI_COMM_WORLD);
 	stop_s = clock();
 	TotalTime += (stop_s - start_s) / double(CLOCKS_PER_SEC) * 1000;
+	if(rank==0)
 	cout << "time: " << TotalTime << endl;
 
-	free(imageData);
+	free(saveimg);
+	free(sum);
+	free(mean);
+	MPI_Finalize();
 	return 0;
 
 }
