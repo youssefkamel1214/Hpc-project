@@ -52,7 +52,7 @@ int* inputImage(int* w, int* h, System::String^ imagePath) //put the size of ima
 
 
 
-int* outputImage(int* w, int* h,int*mean,int*saveimage) //put the size of image in w & h
+int* outputImage(int* w, int* h, int* mean, int* saveimage) //put the size of image in w & h
 {
 	int* input;
 
@@ -63,18 +63,20 @@ int* outputImage(int* w, int* h,int*mean,int*saveimage) //put the size of image 
 	//Read Image and save it to local arrayss
 
 
-	input = new int[(*w)*(*h)];
+	input = new int[(*w) * (*h)];
 	for (int i = 0; i < *h; i++)
 	{
-		for (int j = 0; j <*w; j++)
+		for (int j = 0; j < *w; j++)
 		{
-	
+
 			//cout<< ((c.R + c.B + c.G) / 3)<<"                 B is   " << ((B.R + B.B + B.G) / 3) << endl;
-			input[i * (*w) + j] = mean[i * (*w) + j]- saveimage[i * (*w) + j]; //gray scale value equals the average of RGB values
+			input[i * (*w) + j] = mean[i * (*w) + j] - saveimage[i * (*w) + j]; //gray scale value equals the average of RGB values
 
 		}
 
 	}
+	free(saveimage);
+	saveimage = input;
 	return input;
 }
 
@@ -88,14 +90,13 @@ int* outputImage(int* w, int* h,int*mean,int*saveimage) //put the size of image 
 
 
 
-void create_frontground_Image(int* image, int width, int height, int counter, int th, string index)
+void create_frontground_Image(int* image, int width, int height, int th)
 {
-	System::Drawing::Bitmap MyNewImage(width, height);
 
 
-	for (int i = 0; i < MyNewImage.Height; i++)
+	for (int i = 0; i < height; i++)
 	{
-		for (int j = 0; j < MyNewImage.Width; j++)
+		for (int j = 0; j < width; j++)
 		{
 			//cout<< image[i * width + j] <<endl;
 			//i * OriginalImageWidth + j
@@ -112,13 +113,9 @@ void create_frontground_Image(int* image, int width, int height, int counter, in
 				image[i * width + j] = 0;
 			}
 			//cout << image[i * width + j] << endl;
-
-			System::Drawing::Color c = System::Drawing::Color::FromArgb(image[i * MyNewImage.Width + j], image[i * MyNewImage.Width + j], image[i * MyNewImage.Width + j]);
-			MyNewImage.SetPixel(j, i, c);
 		}
 	}
-	MyNewImage.Save("D:\\study\\third year\\second term\\high perfomance\\projects\\Hpc project\\output\\"
-		+ marshal_as<System::String^>(index) + counter + ".png");
+
 }
 
 
@@ -149,7 +146,7 @@ void createImage(int* image, int width, int height, string index)
 			MyNewImage.SetPixel(j, i, c);
 		}
 	}
-	MyNewImage.Save("D:\\study\\third year\\second term\\high perfomance\\projects\\Hpc project\\output\\"
+	MyNewImage.Save("..\\Output\\"
 		+ marshal_as<System::String^>(index) + ".jpg");
 }
 
@@ -183,10 +180,10 @@ int main()
 	{
 		stringstream strstream;
 		strstream << setw(6) << setfill('0') << i;
-		img = "D:\\study\\third year\\second term\\high perfomance\\projects\\Hpc project\\input\\in";
+		img = "..\\input\\BackGround\\in";
 		img += strstream.str() + ".jpg";
 		saveimg[i % imgework] = inputImage(&w, &h, marshal_as<System::String^>(img));
-		
+
 	}
 	MPI_Barrier(MPI_COMM_WORLD);
 	start_s = clock();
@@ -210,7 +207,7 @@ int main()
 	{
 		for (int i = 0; i < h; i++)
 		{
-			for (int j = 0; j <w; j++)
+			for (int j = 0; j < w; j++)
 			{
 				//i * OriginalImageWidth + j
 				if (mean[i * w + j] < 0)
@@ -224,15 +221,11 @@ int main()
 			}
 		}
 	}
-	MPI_Barrier(MPI_COMM_WORLD);
 
 	for (int i = st_ind; i <= end_ind; i++)
 	{
-		stringstream strstream;
-		strstream << setw(6) << setfill('0') << i;
-		img = "D:\\study\\third year\\second term\\high perfomance\\projects\\Hpc project\\input\\in";
-		img += strstream.str() + ".jpg";
-		create_frontground_Image(outputImage(&w, &h, mean,saveimg[i%imgework]), w, h, i, tz, "fff");
+		stringstream strstream;		
+		create_frontground_Image(outputImage(&w, &h, mean, saveimg[i % imgework]), w, h, tz);
 
 	}
 	MPI_Barrier(MPI_COMM_WORLD);
@@ -240,6 +233,14 @@ int main()
 	TotalTime += (stop_s - start_s) / double(CLOCKS_PER_SEC) * 1000;
 	if (rank == 0)
 		cout << "time: " << TotalTime << endl;
+	for (int i = st_ind; i <= end_ind; i++)
+	{
+		stringstream strstream;
+		strstream << setw(6) << setfill('0') << i;
+		img = strstream.str();
+		createImage(saveimg[i% imgework], w, h, img);
+	}
+	
 	free(saveimg);
 	free(sum);
 	free(mean);
